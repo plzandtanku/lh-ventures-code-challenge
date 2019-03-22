@@ -78,7 +78,65 @@ BalanceOutput.propTypes = {
 export default connect(state => {
   let balance = [];
 
-  /* YOUR CODE GOES HERE */
+  // need an object of "valid" accounts and their label
+  const validAccounts = state.accounts.reduce(function(acc, e) {
+     acc[e.ACCOUNT] = e.LABEL; 
+     return acc;
+  }, {});
+
+  // create object with structure 
+  // {ACCOUNT : {DEBIT: ..., CREDIT: ..., DESCRIPTION: ...,} ... }
+  // first filter out entries not in range or not a valid account
+  let balanceObj = state.journalEntries.filter(function(entry) {
+    if (state.accounts.length < 1 || state.journalEntries.length < 1) return false;
+
+    // define ranges to filter on
+    // if we have a NaN, assume value is *
+    let startAccount = isNaN(state.userInput.startAccount) 
+      ? state.accounts[0].ACCOUNT // use first account in record
+      : state.userInput.startAccount;
+    let endAccount = isNaN(state.userInput.endAccount) 
+      ? state.accounts[state.accounts.length-1].ACCOUNT // use last account
+      : state.userInput.endAccount;  
+    let startPeriod = isNaN(Date.parse(state.userInput.startPeriod)) 
+      ? state.journalEntries[0].PERIOD // use first period
+      : state.userInput.startPeriod;
+    let endPeriod = isNaN(Date.parse(state.userInput.endPeriod)) 
+      ? state.journalEntries[state.journalEntries.length-1].PERIOD // use last period
+      : state.userInput.endPeriod;
+
+    return validAccounts.hasOwnProperty(entry.ACCOUNT) 
+      && entry.ACCOUNT >= startAccount
+      && entry.ACCOUNT <= endAccount
+      && entry.PERIOD >= startPeriod 
+      && entry.PERIOD <= endPeriod;
+  // after filtering, create object of balances
+  }).reduce(function(acc, e) {
+  	// first initialize
+    if (!acc.hasOwnProperty(e.ACCOUNT)) {
+      acc[e.ACCOUNT] = {ACCOUNT: e.ACCOUNT};
+      acc[e.ACCOUNT]["DESCRIPTION"] = validAccounts[e.ACCOUNT];
+      acc[e.ACCOUNT]["DEBIT"] = e.DEBIT;
+      acc[e.ACCOUNT]["CREDIT"] = e.CREDIT;
+      acc[e.ACCOUNT]["BALANCE"] = e.DEBIT - e.CREDIT;
+    }
+    else {
+      acc[e.ACCOUNT]["DEBIT"] += e.DEBIT;
+      acc[e.ACCOUNT]["CREDIT"] += e.CREDIT;
+      acc[e.ACCOUNT]["BALANCE"] += e.DEBIT - e.CREDIT;
+    }
+    return acc;
+  }, {});
+
+  // convert object into array
+  Object.keys(balanceObj).forEach(function (account) {
+    let entry = {};
+    // the keys we want for the balance array
+    ["ACCOUNT", "DESCRIPTION", "DEBIT", "CREDIT", "BALANCE"].forEach(function (key) {
+      entry[key] = balanceObj[account][key];
+    });
+    balance.push(entry);
+  });
 
   const totalCredit = balance.reduce((acc, entry) => acc + entry.CREDIT, 0);
   const totalDebit = balance.reduce((acc, entry) => acc + entry.DEBIT, 0);
